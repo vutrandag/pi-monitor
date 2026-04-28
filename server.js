@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = 9000;
 
 function exec(cmd) {
   try { return execSync(cmd, { encoding: 'utf8' }).trim(); } catch { return ''; }
@@ -16,14 +16,14 @@ app.get('/api/stats', (req, res) => {
   try {
     const result = exec("top -bn1 | grep 'Cpu(s)' | awk '{print $2}'");
     cpuPercent = parseFloat(result) || 0;
-  } catch {}
+  } catch { }
 
   // CPU temp
   let cpuTemp = null;
   try {
     const t = exec('cat /sys/class/thermal/thermal_zone0/temp');
     if (t) cpuTemp = (parseInt(t) / 1000).toFixed(1);
-  } catch {}
+  } catch { }
 
   // Memory
   const totalMem = os.totalmem();
@@ -35,9 +35,9 @@ app.get('/api/stats', (req, res) => {
   try {
     const disk = exec("df -BG / | tail -1 | awk '{print $2, $3, $4}'").split(' ');
     diskTotal = parseInt(disk[0]) || 0;
-    diskUsed  = parseInt(disk[1]) || 0;
-    diskFree  = parseInt(disk[2]) || 0;
-  } catch {}
+    diskUsed = parseInt(disk[1]) || 0;
+    diskFree = parseInt(disk[2]) || 0;
+  } catch { }
 
   // Network (tailscale + eth0)
   const nets = os.networkInterfaces();
@@ -51,7 +51,7 @@ app.get('/api/stats', (req, res) => {
     const parts = netstat.trim().split(/\s+/);
     rxBytes = parseInt(parts[1]) || 0;
     txBytes = parseInt(parts[9]) || 0;
-  } catch {}
+  } catch { }
 
   // Uptime
   const uptimeSec = os.uptime();
@@ -72,13 +72,13 @@ app.get('/api/stats', (req, res) => {
   try {
     const pg = exec('systemctl is-active postgresql 2>/dev/null || pg_isready -q 2>/dev/null && echo active');
     pgStatus = pg.includes('active') ? 'running' : 'stopped';
-  } catch {}
+  } catch { }
 
   // Node processes
   let nodeProcs = 0;
   try {
     nodeProcs = parseInt(exec("pgrep -c node || echo 0")) || 0;
-  } catch {}
+  } catch { }
 
   res.json({
     hostname,
@@ -94,8 +94,10 @@ app.get('/api/stats', (req, res) => {
       free: freeMem,
       percent: parseFloat(((usedMem / totalMem) * 100).toFixed(1))
     },
-    disk: { total: diskTotal, used: diskUsed, free: diskFree,
-      percent: diskTotal ? parseFloat(((diskUsed / diskTotal) * 100).toFixed(1)) : 0 },
+    disk: {
+      total: diskTotal, used: diskUsed, free: diskFree,
+      percent: diskTotal ? parseFloat(((diskUsed / diskTotal) * 100).toFixed(1)) : 0
+    },
     network: { tailscaleIP, ethIP, rxBytes, txBytes },
     load: load.map(l => parseFloat(l.toFixed(2))),
     services: { postgresql: pgStatus, nodeProcesses: nodeProcs },
