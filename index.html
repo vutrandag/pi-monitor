@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1424;
+    --bg3: #151b2e;
+    --card: #111827;
+    --border: rgba(99,179,237,0.12);
+    --border2: rgba(99,179,237,0.22);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #63b3ed;
+    --accent2: #68d391;
+    --accent3: #f6ad55;
+    --accent4: #fc8181;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(99,179,237,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,179,237,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; position: relative; z-index: 1; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2.5rem; padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-area { display: flex; align-items: center; gap: 14px; }
+
+  .pi-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, #1a2744 0%, #0f1f3d 100%);
+    border: 1px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 20px; color: var(--accent);
+    font-weight: 700; letter-spacing: -1px;
+  }
+
+  .hostname { font-size: 1.2rem; font-weight: 600; color: var(--text); }
+  .platform { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .status-dot {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--muted); font-family: var(--mono);
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 6px var(--accent2);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .uptime-badge {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 12px;
+    font-size: 12px; font-family: var(--mono); color: var(--accent);
+  }
+
+  .grid { display: grid; gap: 1rem; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border2); }
+
+  .card-accent {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    border-radius: 14px 14px 0 0;
+  }
+  .ca-blue  { background: linear-gradient(90deg, var(--accent), transparent); }
+  .ca-green { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .ca-amber { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .ca-red   { background: linear-gradient(90deg, var(--accent4), transparent); }
+  .ca-multi { background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3)); }
+
+  .card-label {
+    font-size: 11px; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .card-label svg { opacity: 0.6; }
+
+  .stat-value {
+    font-size: 2rem; font-weight: 700; font-family: var(--mono);
+    line-height: 1; color: var(--text);
+  }
+  .stat-unit { font-size: 13px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+
+  .gauge-wrap { margin-top: 12px; }
+  .gauge-bar {
+    height: 4px; background: var(--bg3); border-radius: 4px; overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .gauge-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .gauge-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  .temp-ring { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+  .ring-svg { flex-shrink: 0; }
+
+  .net-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .net-item { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
+  .net-label { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.07em; }
+  .net-val { font-size: 13px; font-family: var(--mono); color: var(--accent); margin-top: 3px; font-weight: 500; }
+
+  .services-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .svc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg3); border-radius: 8px; padding: 9px 12px;
+  }
+  .svc-name { font-size: 13px; font-family: var(--mono); color: var(--text); }
+  .svc-badge {
+    font-size: 10px; font-family: var(--mono); padding: 3px 9px;
+    border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .badge-ok   { background: rgba(104,211,145,0.12); color: var(--accent2); border: 1px solid rgba(104,211,145,0.25); }
+  .badge-warn { background: rgba(246,173,85,0.12);  color: var(--accent3); border: 1px solid rgba(246,173,85,0.25); }
+  .badge-err  { background: rgba(252,129,129,0.12); color: var(--accent4); border: 1px solid rgba(252,129,129,0.25); }
+
+  .load-bars { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
+  .load-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .load-bar-track { width: 100%; height: 60px; background: var(--bg3); border-radius: 6px; position: relative; overflow: hidden; }
+  .load-bar-fill {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, var(--accent) 0%, rgba(99,179,237,0.4) 100%);
+    border-radius: 6px;
+    transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .load-bar-label { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+  .load-bar-val   { font-size: 12px; color: var(--accent); font-family: var(--mono); font-weight: 500; }
+
+  .refresh-info { text-align: center; margin-top: 2rem; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  .section-title {
+    font-size: 11px; font-family: var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 0.8rem; margin-top: 1.8rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  @media (max-width: 768px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+  @media (max-width: 480px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="container">
+  <header>
+    <div class="logo-area">
+      <div class="pi-icon">π</div>
+      <div>
+        <div class="hostname" id="hostname">pi-worker01</div>
+        <div class="platform" id="platform">aarch64 · Raspberry Pi 5</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-dot"><div class="dot"></div><span id="last-update">live</span></div>
+      <div class="uptime-badge">⬆ <span id="uptime">—</span></div>
+    </div>
+  </header>
+
+  <div class="section-title">compute</div>
+  <div class="grid grid-4">
+    <div class="card">
+      <div class="card-accent ca-blue"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg>
+        CPU Usage
+      </div>
+      <div class="stat-value"><span id="cpu-pct">—</span><span class="stat-unit">%</span></div>
+      <div class="stat-sub" id="cpu-cores">— cores</div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill" id="cpu-bar" style="width:0%;background:var(--accent)"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-accent ca-red"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        Temperature
+      </div>
+      <div id="temp-display">
+        <div class="stat-value"><span id="cpu-temp">—</span><span class="stat-unit">°C</span></div>
+        <div class="stat-sub" id="temp-status">reading...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-accent ca-green"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Load Average
+      </div>
+      <div class="load-bars" id="load-bars">
+        <div class="load-bar-wrap">
+          <div class="load-bar-val" id="load0">—</div>
+          <div class="load-bar-track"><div class="load-bar-fill" id="lb0" style="height:0%"></div></div>
+          <div class="load-bar-label">1m</div>
+        </div>
+        <div class="load-bar-wrap">
+          <div class="load-bar-val" id="load1">—</div>
+          <div class="load-bar-track"><div class="load-bar-fill" id="lb1" style="height:0%;opacity:0.7"></div></div>
+          <div class="load-bar-label">5m</div>
+        </div>
+        <div class="load-bar-wrap">
+          <div class="load-bar-val" id="load2">—</div>
+          <div class="load-bar-track"><div class="load-bar-fill" id="lb2" style="height:0%;opacity:0.4"></div></div>
+          <div class="load-bar-label">15m</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-accent ca-amber"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Memory
+      </div>
+      <div class="stat-value"><span id="mem-pct">—</span><span class="stat-unit">%</span></div>
+      <div class="stat-sub" id="mem-detail">— / — GB</div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill" id="mem-bar" style="width:0%;background:var(--accent3)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">storage & network</div>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="card-accent ca-amber"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Disk (/)
+      </div>
+      <div class="stat-value"><span id="disk-pct">—</span><span class="stat-unit">%</span></div>
+      <div class="stat-sub" id="disk-detail">— / — GB</div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill" id="disk-bar" style="width:0%;background:var(--accent3)"></div></div>
+        <div class="gauge-labels"><span id="disk-used-g">0 GB used</span><span id="disk-free-g">0 GB free</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column: span 2;">
+      <div class="card-accent ca-blue"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Network
+      </div>
+      <div class="net-grid">
+        <div class="net-item">
+          <div class="net-label">Tailscale IP</div>
+          <div class="net-val" id="ts-ip">—</div>
+        </div>
+        <div class="net-item">
+          <div class="net-label">Ethernet IP</div>
+          <div class="net-val" id="eth-ip">—</div>
+        </div>
+        <div class="net-item">
+          <div class="net-label">RX Total</div>
+          <div class="net-val" id="net-rx">—</div>
+        </div>
+        <div class="net-item">
+          <div class="net-label">TX Total</div>
+          <div class="net-val" id="net-tx">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">services</div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-accent ca-green"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        System Services
+      </div>
+      <div class="services-list" id="services-list">
+        <div class="svc-row"><span class="svc-name">postgresql</span><span class="svc-badge badge-warn" id="svc-pg">—</span></div>
+        <div class="svc-row"><span class="svc-name">node processes</span><span class="svc-badge badge-warn" id="svc-node">—</span></div>
+        <div class="svc-row"><span class="svc-name">tailscaled</span><span class="svc-badge badge-ok">running</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-accent ca-multi"></div>
+      <div class="card-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        Stack Summary
+      </div>
+      <div class="services-list">
+        <div class="svc-row"><span class="svc-name">PostgreSQL 17</span><span class="svc-badge badge-ok">+ pgvector 0.8.2</span></div>
+        <div class="svc-row"><span class="svc-name">Node.js</span><span class="svc-badge badge-ok">v20.19.2 LTS</span></div>
+        <div class="svc-row"><span class="svc-name">Raspberry Pi 5</span><span class="svc-badge badge-ok">8GB · 64GB</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="refresh-info">auto-refresh every 3s · <span id="refresh-count">0</span> updates</div>
+</div>
+
+<script>
+let refreshCount = 0;
+
+function fmtBytes(b) {
+  if (b > 1e9) return (b/1e9).toFixed(2) + ' GB';
+  if (b > 1e6) return (b/1e6).toFixed(1) + ' MB';
+  if (b > 1e3) return (b/1e3).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+function setBar(id, pct, warnAt=70, critAt=85) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.width = Math.min(pct, 100) + '%';
+  if (pct >= critAt) el.style.background = 'var(--accent4)';
+  else if (pct >= warnAt) el.style.background = 'var(--accent3)';
+}
+
+function setTempColor(temp) {
+  const el = document.getElementById('cpu-temp');
+  if (!el) return;
+  if (temp >= 80) el.style.color = 'var(--accent4)';
+  else if (temp >= 65) el.style.color = 'var(--accent3)';
+  else el.style.color = 'var(--accent2)';
+}
+
+async function fetchStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+
+    document.getElementById('hostname').textContent = d.hostname;
+    document.getElementById('platform').textContent = d.platform + ' · Raspberry Pi 5';
+    document.getElementById('uptime').textContent = d.uptime;
+
+    document.getElementById('cpu-pct').textContent = d.cpuPercent;
+    document.getElementById('cpu-cores').textContent = d.cpuCores + ' cores · ' + (d.cpuModel || 'ARM');
+    setBar('cpu-bar', d.cpuPercent, 60, 80);
+
+    if (d.cpuTemp) {
+      const t = parseFloat(d.cpuTemp);
+      document.getElementById('cpu-temp').textContent = d.cpuTemp;
+      setTempColor(t);
+      document.getElementById('temp-status').textContent =
+        t >= 80 ? 'critical — check cooling' :
+        t >= 65 ? 'warm — monitor closely' :
+        t >= 50 ? 'normal operating temp' : 'cool & healthy';
+    } else {
+      document.getElementById('cpu-temp').textContent = 'N/A';
+      document.getElementById('temp-status').textContent = 'sensor unavailable';
+    }
+
+    const cores = d.cpuCores || 4;
+    ['0','1','2'].forEach((i) => {
+      const v = d.load[parseInt(i)];
+      document.getElementById('load' + i).textContent = v.toFixed(2);
+      const pct = Math.min((v / cores) * 100, 100);
+      document.getElementById('lb' + i).style.height = pct + '%';
+    });
+
+    const mem = d.memory;
+    document.getElementById('mem-pct').textContent = mem.percent;
+    document.getElementById('mem-detail').textContent =
+      (mem.used/1e9).toFixed(1) + ' / ' + (mem.total/1e9).toFixed(1) + ' GB used';
+    setBar('mem-bar', mem.percent, 70, 85);
+
+    const disk = d.disk;
+    document.getElementById('disk-pct').textContent = disk.percent;
+    document.getElementById('disk-detail').textContent = disk.used + ' / ' + disk.total + ' GB';
+    document.getElementById('disk-used-g').textContent = disk.used + ' GB used';
+    document.getElementById('disk-free-g').textContent = disk.free + ' GB free';
+    setBar('disk-bar', disk.percent, 75, 90);
+
+    document.getElementById('ts-ip').textContent = d.network.tailscaleIP || 'not connected';
+    document.getElementById('eth-ip').textContent = d.network.ethIP || 'not detected';
+    document.getElementById('net-rx').textContent = fmtBytes(d.network.rxBytes);
+    document.getElementById('net-tx').textContent = fmtBytes(d.network.txBytes);
+
+    const pgEl = document.getElementById('svc-pg');
+    pgEl.textContent = d.services.postgresql;
+    pgEl.className = 'svc-badge ' + (d.services.postgresql === 'running' ? 'badge-ok' : 'badge-err');
+
+    const nodeEl = document.getElementById('svc-node');
+    nodeEl.textContent = d.services.nodeProcesses + ' proc';
+    nodeEl.className = 'svc-badge ' + (d.services.nodeProcesses > 0 ? 'badge-ok' : 'badge-warn');
+
+    refreshCount++;
+    document.getElementById('refresh-count').textContent = refreshCount;
+    const now = new Date();
+    document.getElementById('last-update').textContent =
+      now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+  } catch(e) {
+    document.getElementById('last-update').textContent = 'error — retrying';
+  }
+}
+
+fetchStats();
+setInterval(fetchStats, 3000);
+</script>
+</body>
+</html>
